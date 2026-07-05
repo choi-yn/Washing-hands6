@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>손씻기 순서 맞추기</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+      background: linear-gradient(160deg, #e8f4fc 0%, #fce8f0 50%, #fff5e6 100%);
+    }
+
+    .screen {
+      display: none;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+      padding: 6px 10px 8px;
+      overflow: hidden;
+    }
+
+    .screen.active {
+      display: flex;
+    }
+
+    .screen-title {
+      text-align: center;
+      font-size: clamp(16px, 4vw, 22px);
+      color: #5b7a99;
+      font-weight: bold;
+      margin-bottom: clamp(8px, 2vh, 12px);
+      flex-shrink: 0;
+      line-height: 1.2;
+    }
+
+    .screen-sub {
+      text-align: center;
+      font-size: clamp(11px, 2.8vw, 13px);
+      color: #8899aa;
+      margin-bottom: clamp(14px, 3.5vh, 22px);
+      flex-shrink: 0;
+      line-height: 1.2;
+    }
+
+    #screen-step1 {
+      touch-action: none;
+    }
+
+    /* ===== 1단계 ===== */
+    .card-pool {
+      flex: 0 0 auto;
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 2px;
+      justify-content: stretch;
+      align-items: flex-start;
+      padding: 2px;
+      background: rgba(255, 255, 255, 0.55);
+      border-radius: 16px;
+      overflow: hidden;
+      margin-bottom: clamp(16px, 4vh, 28px);
+      width: 100%;
+      touch-action: none;
+    }
+
+    .card-slot {
+      flex: 1 1 0;
+      min-width: 0;
+      aspect-ratio: 337 / 271;
+      position: relative;
+    }
+
+    .drag-card {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 0;
+      overflow: visible;
+      box-shadow: none;
+      cursor: grab;
+      touch-action: none;
+      transition: transform 0.15s, box-shadow 0.15s;
+      background: transparent;
+      padding: 0;
+      display: block;
+    }
+
+    .drag-card.tappable:active,
+    .drag-card.tappable.playing {
+      transform: scale(0.96);
+    }
+
+    .drag-card.dragging {
+      position: fixed;
+      z-index: 1000;
+      cursor: grabbing;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.2);
+      transform: scale(1.08);
+      opacity: 0.95;
+      touch-action: none;
+      transition: none;
+    }
+
+    .drag-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+      display: block;
+      border-radius: 0;
+    }
+
+    .drag-card.placed {
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .drag-card.shake {
+      animation: shake 0.4s ease;
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-8px); }
+      75% { transform: translateX(8px); }
+    }
+
+    .slots-wrap {
+      flex: 0 0 auto;
+      width: 100%;
+      overflow: hidden;
+      padding-bottom: 0;
+    }
+
+    .slots-row {
+      display: flex;
+      align-items: flex-end;
+      justify-content: stretch;
+      flex-wrap: nowrap;
+      gap: 0;
+      width: 100%;
+      padding: 2px 0 0;
+    }
+
+    .slot-unit {
+      flex: 1 1 0;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .slot-arrow {
+      flex: 0 0 auto;
+      font-size: clamp(14px, 4vw, 22px);
+      color: #7ec8e3;
+      font-weight: bold;
+      align-self: flex-end;
+      padding: 0;
+      line-height: 1;
+      width: clamp(2px, 0.8vw, 6px);
+      text-align: center;
+      transform: translateX(-0.15em) scaleX(0.75);
+      margin-left: -2px;
+      margin-right: -2px;
+      margin-bottom: calc(
+        (((100vw - 40px) / 7) * (271 / 337)) +
+        (clamp(22px, 5vw, 32px) + 3px) * 0.5 -
+        0.5em + 3px
+      );
+    }
+
+    .drop-slot {
+      position: relative;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 337 / 271;
+      border: none;
+      border-radius: 0;
+      overflow: visible;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    /* 빈 박스만 CSS 테두리 표시 */
+    .drop-slot::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 12px;
+      background: linear-gradient(180deg, #ffffff 0%, #e8f4fc 100%);
+      border: 2px solid #7ec8e3;
+      box-shadow: 0 4px 10px rgba(91, 168, 212, 0.2);
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    .drop-slot:has(.slot-content img)::before {
+      display: none;
+    }
+
+    .drop-slot.locked .slot-content {
+      filter: drop-shadow(0 0 2px rgba(107, 196, 126, 0.9));
+    }
+
+    .drop-slot .slot-content {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 0;
+      overflow: visible;
+      z-index: 1;
+    }
+
+    .drop-slot .slot-content.tappable {
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    .drop-slot .slot-content.tappable:active,
+    .drop-slot .slot-content.playing {
+      transform: scale(0.97);
+    }
+
+    .drag-card.playing {
+      transform: scale(0.96);
+    }
+
+    .drop-slot .slot-content img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      border-radius: 0;
+      display: block;
+      pointer-events: none;
+    }
+
+    .drop-slot.highlight::before {
+      border-color: #5ba8d4;
+      box-shadow: 0 0 0 3px rgba(126, 200, 227, 0.45), 0 4px 10px rgba(91, 168, 212, 0.2);
+    }
+
+    .drop-slot.highlight .slot-content {
+      filter: drop-shadow(0 0 4px #7ec8e3);
+    }
+
+    .drop-slot.correct-flash .slot-content {
+      animation: correctFlashImg 0.5s ease;
+    }
+
+    @keyframes correctFlashImg {
+      0%, 100% { filter: none; }
+      50% { filter: drop-shadow(0 0 6px #6bc47e); }
+    }
+
+    .slot-number {
+      flex-shrink: 0;
+      width: clamp(22px, 5vw, 32px);
+      height: clamp(22px, 5vw, 32px);
+      background: linear-gradient(135deg, #7ec8e3, #5ba8d4);
+      color: #fff;
+      border-radius: 50%;
+      font-size: clamp(12px, 2.8vw, 18px);
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 4px rgba(91, 168, 212, 0.35);
+    }
+
+    .drop-slot.highlight {
+      outline: none;
+    }
+
+    .drop-slot.correct-flash {
+      animation: none;
+    }
+
+    .complete-banner {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      background: rgba(255, 255, 255, 0.96);
+      padding: 28px 40px;
+      border-radius: 24px;
+      font-size: clamp(24px, 6vw, 36px);
+      font-weight: bold;
+      color: #6bc47e;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15);
+      z-index: 2000;
+      transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .complete-banner.show {
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    #fireworks-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1999;
+    }
+
+    /* ===== 2단계 ===== */
+    #screen-step2 {
+      flex-direction: column;
+      padding: 8px 12px;
+    }
+
+    #screen-step2 .screen-title {
+      text-align: center;
+      margin-bottom: clamp(6px, 1.5vh, 10px);
+    }
+
+    #screen-step2 .screen-sub {
+      text-align: center;
+      margin-bottom: clamp(8px, 2vh, 14px);
+    }
+
+    #screen-step2 .parts-grid {
+      flex: 1;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-rows: repeat(2, minmax(0, 1fr));
+      gap: clamp(0px, 0.4vw, 3px);
+      width: min(96vw, 680px);
+      max-height: min(62vh, 440px);
+      margin: 0 auto;
+      min-height: 0;
+      align-content: center;
+      align-self: center;
+      padding: 0;
+    }
+
+    #screen-step2 .part-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 0;
+      min-height: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #screen-step2 .part-btn img {
+      width: 100%;
+      height: 100%;
+      max-height: 100%;
+      aspect-ratio: 337 / 271;
+      object-fit: contain;
+    }
+
+    .part-btn {
+      border: none;
+      background: transparent;
+      border-radius: 0;
+      padding: 0;
+      box-shadow: none;
+      cursor: pointer;
+      transition: transform 0.12s;
+      touch-action: manipulation;
+    }
+
+    .part-btn:active,
+    .part-btn.playing {
+      transform: scale(0.96);
+    }
+
+    .part-btn img {
+      width: 100%;
+      object-fit: contain;
+      border-radius: 0;
+      pointer-events: none;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1단계: 순서 맞추기 -->
+  <div id="screen-step1" class="screen active">
+    <h1 class="screen-title">손 씻기 순서 맞추기</h1>
+    <p class="screen-sub">그림을 아래 박스에 순서대로 놓아요</p>
+    <div class="card-pool" id="card-pool"></div>
+    <div class="slots-wrap">
+      <div class="slots-row" id="slots-row"></div>
+    </div>
+  </div>
+
+  <!-- 2단계: 부위 알아보기 -->
+  <div id="screen-step2" class="screen">
+    <h1 class="screen-title">꼼꼼하게 손 씻기</h1>
+    <p class="screen-sub">그림을 눌러보세요.</p>
+    <div class="parts-grid" id="parts-grid"></div>
+  </div>
+
+  <div class="complete-banner" id="complete-banner">🎉 성공했어요! 🎉</div>
+  <canvas id="fireworks-canvas"></canvas>
+
+  <script>
+    (function () {
+      'use strict';
+
+      var STEP1_IMAGES = [
+        { step: 1, src: 'image/손씻기1-1_손이 더려워졌어요.png', audio: 'sound/audio_1_손이더러워졌어.mp3' },
+        { step: 2, src: 'image/손씻기1-2_손에 물을 적셔요.png', audio: 'sound/audio_2_ 물을 적셔요.mp3' },
+        { step: 3, src: 'image/손씻기1-3_손에 비누를 발라요.png', audio: 'sound/audio_3_비누를_발라요.mp3' },
+        { step: 4, src: 'image/손씻기1-4_손 전체를 꼼꼼하게 문질러요.png', audio: 'sound/audio_4_손_전체를_꼼꼼하게_문질러요.mp3' },
+        { step: 5, src: 'image/손씻기1-5_물로 헹궈요.png', audio: 'sound/audio_5_물로_헹궈요.mp3' },
+        { step: 6, src: 'image/손씻기1-6_핸드타올이나 수건으로 닦아요.png', audio: 'sound/audio_6_핸드타올이나_수건으로_닦아요.mp3' },
+        { step: 7, src: 'image/손씻기1-7_손씻기끝.png', audio: 'sound/audio_7_손_씻기_끝_.mp3' }
+      ];
+
+      var STEP2_PARTS = [
+        { label: '손바닥',   img: 'image/손씻기2-1_손바닥.png',   audio: 'sound/audio_9_손바닥.mp3' },
+        { label: '손등',     img: 'image/손씻기2-2_손등.png',     audio: 'sound/audio_10_손등.mp3' },
+        { label: '손가락사이', img: 'image/손씻기2-3_손가락사이.png', audio: 'sound/audio_11_손가락사이.mp3' },
+        { label: '손가락',   img: 'image/손씻기2-4_손가락.png',   audio: 'sound/audio_12_손가락.mp3' },
+        { label: '손톱',     img: 'image/손씻기2-5_손톱.png',     audio: 'sound/audio_13_손톱.mp3' },
+        { label: '손목',     img: 'image/손씻기2-6_손목.png',     audio: 'sound/audio_14_손목.mp3' }
+      ];
+
+      var SFX_CORRECT = 'sound/Glow3.mp3';
+      var SFX_WRONG = 'sound/Error3.mp3';
+      var STEP2_INTRO = 'sound/audio15_이번에는_손의_어느.mp3';
+
+      var HINT_STEP = 1;
+      var placedCount = 1;
+      var dragging = null;
+      var dragOffsetX = 0;
+      var dragOffsetY = 0;
+      var dragOriginParent = null;
+      var dragOriginNext = null;
+      var currentAudio = null;
+      var DRAG_THRESHOLD = 5;
+      var touchActiveCard = null;
+      var touchStartX = 0;
+      var touchStartY = 0;
+      var touchMoved = false;
+      var docDragBound = false;
+
+      function getStep1Item(step) {
+        for (var i = 0; i < STEP1_IMAGES.length; i++) {
+          if (STEP1_IMAGES[i].step === step) return STEP1_IMAGES[i];
+        }
+        return null;
+      }
+
+      function playStep1Audio(step, el) {
+        var item = getStep1Item(step);
+        if (item && item.audio) playAudio(item.audio, el);
+      }
+
+      function bindStep1ImageTap(target, step) {
+        if (target.dataset.audioBound === '1') return;
+        target.dataset.audioBound = '1';
+        target.classList.add('tappable');
+
+        var lastPlay = 0;
+        function playNow(e) {
+          if (e) {
+            e.stopPropagation();
+          }
+          var now = Date.now();
+          if (now - lastPlay < 350) return;
+          lastPlay = now;
+          playStep1Audio(step, target);
+        }
+
+        target.addEventListener('click', playNow);
+        target.addEventListener('touchend', function (e) {
+          e.preventDefault();
+          playNow(e);
+        }, { passive: false });
+      }
+
+      function shuffle(arr) {
+        var a = arr.slice();
+        for (var i = a.length - 1; i > 0; i--) {
+          var j = Math.floor(Math.random() * (i + 1));
+          var t = a[i]; a[i] = a[j]; a[j] = t;
+        }
+        return a;
+      }
+
+      function showScreen(id) {
+        document.querySelectorAll('.screen').forEach(function (s) {
+          s.classList.toggle('active', s.id === id);
+        });
+      }
+
+      function notifyAppInventor(msg) {
+        try {
+          if (window.AppInventor && window.AppInventor.setWebViewString) {
+            window.AppInventor.setWebViewString(msg);
+          }
+        } catch (e) {}
+      }
+
+      function playSfx(src) {
+        var sfx = new Audio(src);
+        sfx.volume = 1;
+        var p = sfx.play();
+        if (p && p.catch) {
+          p.catch(function () {});
+        }
+      }
+
+      function launchFireworks() {
+        var canvas = document.getElementById('fireworks-canvas');
+        var ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        var particles = [];
+        var colors = ['#7ec8e3', '#f5a8c8', '#ffe082', '#8ed4a0', '#ce93d8', '#ffab91'];
+
+        for (var b = 0; b < 6; b++) {
+          var cx = Math.random() * canvas.width;
+          var cy = Math.random() * canvas.height * 0.55 + canvas.height * 0.08;
+          var color = colors[Math.floor(Math.random() * colors.length)];
+          for (var i = 0; i < 28; i++) {
+            var angle = (Math.PI * 2 / 28) * i;
+            var speed = 2 + Math.random() * 4;
+            particles.push({
+              x: cx, y: cy,
+              vx: Math.cos(angle) * speed,
+              vy: Math.sin(angle) * speed,
+              color: color,
+              life: 55 + Math.random() * 25,
+              maxLife: 80,
+              size: 3 + Math.random() * 3
+            });
+          }
+        }
+
+        var frame = 0;
+        function animate() {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          var alive = false;
+          particles.forEach(function (p) {
+            if (p.life <= 0) return;
+            alive = true;
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.05;
+            p.life--;
+            ctx.globalAlpha = p.life / p.maxLife;
+            ctx.fillStyle = p.color;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fill();
+          });
+          ctx.globalAlpha = 1;
+          frame++;
+          if (alive && frame < 130) {
+            requestAnimationFrame(animate);
+          } else {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+          }
+        }
+        animate();
+      }
+
+      /* ===== 1단계 초기화 ===== */
+      function initStep1() {
+        var pool = document.getElementById('card-pool');
+        var row = document.getElementById('slots-row');
+        pool.innerHTML = '';
+        row.innerHTML = '';
+        placedCount = 1;
+
+        var poolItems = STEP1_IMAGES.filter(function (item) {
+          return item.step !== HINT_STEP;
+        });
+
+        shuffle(poolItems).forEach(function (item) {
+          var slotWrap = document.createElement('div');
+          slotWrap.className = 'card-slot';
+          var card = document.createElement('div');
+          card.className = 'drag-card tappable';
+          card.dataset.step = item.step;
+          card.innerHTML = '<img src="' + item.src + '" alt="">';
+          makeDraggable(card);
+          slotWrap.appendChild(card);
+          pool.appendChild(slotWrap);
+        });
+
+        for (var i = 1; i <= 7; i++) {
+          if (i > 1) {
+            var arrow = document.createElement('span');
+            arrow.className = 'slot-arrow';
+            arrow.textContent = '→';
+            row.appendChild(arrow);
+          }
+          var unit = document.createElement('div');
+          unit.className = 'slot-unit';
+          var slot = document.createElement('div');
+          slot.className = 'drop-slot' + (i === HINT_STEP ? ' locked' : '');
+          slot.dataset.expected = i;
+          unit.innerHTML = '<span class="slot-number">' + i + '</span>';
+          slot.innerHTML = '<div class="slot-content"></div>';
+          unit.appendChild(slot);
+          row.appendChild(unit);
+
+          if (i === HINT_STEP) {
+            var hint = STEP1_IMAGES[0];
+            var hintContent = slot.querySelector('.slot-content');
+            var hintImg = document.createElement('img');
+            hintImg.src = hint.src;
+            hintImg.alt = '손이 더려워졌어요';
+            hintContent.appendChild(hintImg);
+            bindStep1ImageTap(hintContent, HINT_STEP);
+          }
+        }
+      }
+
+      function getSlotAt(x, y) {
+        var slots = document.querySelectorAll('.drop-slot');
+        for (var i = 0; i < slots.length; i++) {
+          var r = slots[i].getBoundingClientRect();
+          if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+            if (!slots[i].querySelector('.slot-content img')) return slots[i];
+          }
+        }
+        return null;
+      }
+
+      function returnCard(card) {
+        card.classList.remove('dragging');
+        card.style.cssText = '';
+        if (dragOriginParent) {
+          if (dragOriginNext) {
+            dragOriginParent.insertBefore(card, dragOriginNext);
+          } else {
+            dragOriginParent.appendChild(card);
+          }
+        }
+        card.classList.add('shake');
+        setTimeout(function () { card.classList.remove('shake'); }, 400);
+      }
+
+      function placeCard(card, slot) {
+        var content = slot.querySelector('.slot-content');
+        var img = card.querySelector('img').cloneNode(true);
+        var step = parseInt(card.dataset.step, 10);
+        content.appendChild(img);
+        bindStep1ImageTap(content, step);
+        card.classList.add('placed');
+        card.classList.remove('dragging');
+        card.style.cssText = '';
+        if (card.parentNode !== dragOriginParent && dragOriginParent) {
+          dragOriginParent.appendChild(card);
+        }
+        slot.classList.add('correct-flash');
+        playSfx(SFX_CORRECT);
+        setTimeout(function () { slot.classList.remove('correct-flash'); }, 500);
+        placedCount++;
+        if (placedCount >= 7) onStep1Complete();
+      }
+
+      function onStep1Complete() {
+        launchFireworks();
+        var banner = document.getElementById('complete-banner');
+        banner.classList.add('show');
+        notifyAppInventor('STEP1_COMPLETE');
+        setTimeout(function () {
+          banner.classList.remove('show');
+          showScreen('screen-step2');
+          initStep2();
+          notifyAppInventor('STEP2_START');
+        }, 2500);
+      }
+
+      function startDrag(card, clientX, clientY) {
+        if (card.classList.contains('placed')) return;
+        dragging = card;
+        dragOriginParent = card.parentNode;
+        dragOriginNext = card.nextSibling;
+        var rect = card.getBoundingClientRect();
+        dragOffsetX = clientX - rect.left;
+        dragOffsetY = clientY - rect.top;
+        card.classList.add('dragging');
+        card.style.transition = 'none';
+        card.style.position = 'fixed';
+        card.style.zIndex = '1000';
+        card.style.left = rect.left + 'px';
+        card.style.top = rect.top + 'px';
+        card.style.width = rect.width + 'px';
+        card.style.height = rect.height + 'px';
+        card.style.margin = '0';
+        document.body.appendChild(card);
+      }
+
+      function moveDrag(clientX, clientY) {
+        if (!dragging) return;
+        dragging.style.left = (clientX - dragOffsetX) + 'px';
+        dragging.style.top = (clientY - dragOffsetY) + 'px';
+        document.querySelectorAll('.drop-slot').forEach(function (s) {
+          s.classList.remove('highlight');
+        });
+        var slot = getSlotAt(clientX, clientY);
+        if (slot) slot.classList.add('highlight');
+      }
+
+      function endDrag(clientX, clientY) {
+        if (!dragging) return;
+        var card = dragging;
+        dragging = null;
+        document.querySelectorAll('.drop-slot').forEach(function (s) {
+          s.classList.remove('highlight');
+        });
+        var slot = getSlotAt(clientX, clientY);
+        if (slot && parseInt(card.dataset.step, 10) === parseInt(slot.dataset.expected, 10)) {
+          placeCard(card, slot);
+        } else {
+          if (slot || card.dataset.step) {
+            playSfx(SFX_WRONG);
+          }
+          returnCard(card);
+        }
+      }
+
+      function bindDocDragEvents() {
+        if (docDragBound) return;
+        docDragBound = true;
+
+        var opts = { passive: false, capture: true };
+
+        document.addEventListener('mousemove', function (e) {
+          if (!touchActiveCard && !dragging) return;
+          handleDragMove(e.clientX, e.clientY);
+        }, true);
+
+        document.addEventListener('touchmove', function (e) {
+          if (!touchActiveCard && !dragging) return;
+          if (!e.touches.length) return;
+          e.preventDefault();
+          handleDragMove(e.touches[0].clientX, e.touches[0].clientY);
+        }, opts);
+
+        document.addEventListener('mouseup', function (e) {
+          if (!touchActiveCard && !dragging) return;
+          handleDragEnd(e.clientX, e.clientY);
+        }, true);
+
+        document.addEventListener('touchend', function (e) {
+          if (!touchActiveCard && !dragging) return;
+          var t = e.changedTouches[0];
+          if (t) handleDragEnd(t.clientX, t.clientY);
+        }, opts);
+
+        document.addEventListener('touchcancel', function () {
+          if (dragging) {
+            returnCard(dragging);
+            dragging = null;
+          }
+          touchActiveCard = null;
+          touchMoved = false;
+        }, opts);
+      }
+
+      function handleDragMove(clientX, clientY) {
+        if (dragging) {
+          moveDrag(clientX, clientY);
+          return;
+        }
+        if (!touchActiveCard) return;
+        var card = touchActiveCard;
+        if (!touchMoved &&
+            (Math.abs(clientX - touchStartX) > DRAG_THRESHOLD ||
+             Math.abs(clientY - touchStartY) > DRAG_THRESHOLD)) {
+          touchMoved = true;
+          card.dataset.wasDragged = '1';
+          startDrag(card, clientX, clientY);
+          moveDrag(clientX, clientY);
+        }
+      }
+
+      function handleDragEnd(clientX, clientY) {
+        if (dragging) {
+          var dragCard = dragging;
+          touchActiveCard = null;
+          touchMoved = false;
+          endDrag(clientX, clientY);
+          dragCard.dataset.wasDragged = '0';
+          return;
+        }
+        if (!touchActiveCard) return;
+        var card = touchActiveCard;
+        var step = parseInt(card.dataset.step, 10);
+        var moved = touchMoved;
+        touchActiveCard = null;
+        touchMoved = false;
+        if (!moved) {
+          playStep1Audio(step, card);
+        }
+        card.dataset.wasDragged = '0';
+      }
+
+      function makeDraggable(card) {
+        bindDocDragEvents();
+
+        function onStart(clientX, clientY) {
+          if (card.classList.contains('placed')) return;
+          touchActiveCard = card;
+          touchMoved = false;
+          touchStartX = clientX;
+          touchStartY = clientY;
+          card.dataset.wasDragged = '0';
+        }
+
+        card.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          onStart(e.clientX, e.clientY);
+        });
+
+        card.addEventListener('touchstart', function (e) {
+          if (e.touches.length !== 1) return;
+          e.preventDefault();
+          onStart(e.touches[0].clientX, e.touches[0].clientY);
+        }, { passive: false });
+
+        card.addEventListener('touchmove', function (e) {
+          if (touchActiveCard !== card && dragging !== card) return;
+          e.preventDefault();
+          if (e.touches.length) {
+            handleDragMove(e.touches[0].clientX, e.touches[0].clientY);
+          }
+        }, { passive: false });
+
+        card.addEventListener('touchend', function (e) {
+          if (touchActiveCard !== card && dragging !== card) return;
+          var t = e.changedTouches[0];
+          if (t) handleDragEnd(t.clientX, t.clientY);
+        }, { passive: false });
+      }
+
+      /* ===== 2단계 ===== */
+      function playAudio(src, el) {
+        if (currentAudio) {
+          currentAudio.pause();
+          currentAudio.currentTime = 0;
+        }
+        document.querySelectorAll('.part-btn, .drag-card.tappable, .drop-slot .slot-content.tappable').forEach(function (b) {
+          b.classList.remove('playing');
+        });
+        currentAudio = new Audio(src);
+        currentAudio.volume = 1;
+        if (el) el.classList.add('playing');
+        var p = currentAudio.play();
+        if (p && p.catch) {
+          p.catch(function () {});
+        }
+        currentAudio.onended = function () {
+          if (el) el.classList.remove('playing');
+        };
+      }
+
+      function initStep2() {
+        var grid = document.getElementById('parts-grid');
+        grid.innerHTML = '';
+        STEP2_PARTS.forEach(function (part) {
+          var btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'part-btn';
+          btn.innerHTML = '<img src="' + part.img + '" alt="' + part.label + '">';
+          btn.addEventListener('click', function () {
+            playAudio(part.audio, btn);
+          });
+          grid.appendChild(btn);
+        });
+        playAudio(STEP2_INTRO);
+      }
+
+      initStep1();
+      notifyAppInventor('STEP_LOADED');
+    })();
+  </script>
+</body>
+</html>
